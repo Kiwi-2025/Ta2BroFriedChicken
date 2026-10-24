@@ -69,3 +69,8 @@ python tools/package_mod.py
 
 运行时只使用模组内部的相对资源引用，不依赖作者的游戏安装位置、系统用户名或个人配置。
 工坊介绍文案见 [WORKSHOP_DESCRIPTION.bbcode](WORKSHOP_DESCRIPTION.bbcode)。
+
+## 创意工坊发布素材
+
+上传时选择 [preview.jpg](preview.jpg) 作为预览图片。
+将 [WORKSHOP_DESCRIPTION.bbcode](WORKSHOP_DESCRIPTION.bbcode) 中的全文复制到上传工具的描述栏；仅把文案文件放进模组不会自动填写介绍。

@@ -7,7 +7,7 @@ import struct
 from zipfile import ZipFile
 
 ROOT = Path(__file__).resolve().parents[1]
-RUNTIME_ROOT = ("modinfo.lua", "modmain.lua", "modicon.xml", "modicon.tex")
+RUNTIME_ROOT = ("modinfo.lua", "modmain.lua", "modicon.xml", "modicon.tex", "preview.jpg")
 TOOLS = ("build_assets.py", "test_mod.py", "package_mod.py", "audit_release.py", "requirements.txt")
 TEXT_SUFFIXES = {".lua", ".xml", ".md", ".txt", ".py", ".bbcode", ".json"}
 PRIVATE_PATTERNS = (
@@ -53,6 +53,11 @@ def audit_bytes(name, data):
             if kind in PNG_METADATA:
                 raise ValueError(f"Remove non-image metadata from {name}")
             offset += 12 + length
+    elif suffix in {".jpg", ".jpeg"}:
+        from PIL import Image
+        with Image.open(io.BytesIO(data)) as image:
+            if image.format != "JPEG" or image.getexif() or image.info.get("xmp") or image.info.get("comment"):
+                raise ValueError(f"JPEG must be an image without personal metadata: {name}")
     elif suffix == ".zip":
         with ZipFile(io.BytesIO(data)) as archive:
             if archive.testzip() is not None:
