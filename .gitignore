@@ -1,0 +1,24 @@
+__pycache__/
+.pytest_cache/
+tools/.cache/
+dist/
+
+# AI relevant docs
+VALIDATION.md
+
+# Local experiments, generated art and game reference images
+art/reference/
+art/source/legacy-*/
+art/processed/
+art/inventory_preview.png
+art/prompts-*.json
+*.log
+*.dmp
+*.cr.txt
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+.DS_Store
+Thumbs.db
