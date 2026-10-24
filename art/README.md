@@ -20,11 +20,11 @@
 
 ## 工坊封面
 
-`preview.jpg` 使用内置 imagegen 编辑生成，已去掉顶部品牌名称，仅保留三种口味文字和料理画面。
-导出为不含个人元数据的 1024×1024 JPEG。
+`preview.jpg` 使用内置 imagegen 编辑生成，无品牌标题，仅保留三种口味文字和料理画面。
+口味文字靠近顶部，三款料理放大并上移，减少留白；导出为不含个人元数据的 1024×1024 JPEG。
 
 本轮编辑提示词：
 
 ```text
-Remove only the large brand title and its black drop shadow from the top of the supplied cover. Fill the area seamlessly with the existing dark brown parchment background. Preserve the smaller flavor subtitle, all three round foil containers of juicy chicken, their layout, colors, rough ink style and border. Do not add a replacement title, logo, symbol, watermark or other text. Keep the square opaque composition.
+Recompose the square cover to remove wasted top space. Center the existing flavor subtitle near the top at 7%-15% canvas height. Enlarge and move up the three foil tubs to occupy 19%-95% canvas height: garlic back-left, soy-onion back-right, spicy front-center, naturally overlapping. Keep balanced narrow margins, the same food designs, thick black outlines, warm earthy palette, parchment background and rough border. Keep all food fully in frame. Do not restore the brand name or add any text, logos or watermarks.
 ```
