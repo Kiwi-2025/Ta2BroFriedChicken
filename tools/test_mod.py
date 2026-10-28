@@ -1,13 +1,15 @@
 """Lua 5.1 contract tests plus independent packed-resource validation.
 
 Optional --game-dir loads installed, unmodified cooking.lua and recipe predicates
-to check actual ingredient tags and conflicts with vanilla dishes.
+to check actual ingredient tags and conflicts with vanilla dishes. Combine with
+--cookdiary-dir to check the installed CookDiary recipe discovery and constraints.
 """
 from __future__ import annotations
 
 import argparse
 from collections import Counter
 import io
+from itertools import combinations_with_replacement
 from pathlib import Path
 import struct
 import unittest
@@ -19,6 +21,7 @@ from PIL import Image, ImageChops, ImageOps
 
 ROOT = Path(__file__).resolve().parents[1]
 GAME_DIR = None
+COOKDIARY_DIR = None
 
 
 def runtime():
@@ -71,7 +74,8 @@ class Recipes(unittest.TestCase):
         g = self.lua.globals()
         for cooker, speed in (("cookpot", 1), ("portablecookpot", .8)):
             for _, food in self.make(g.TUNING, g.FOODTYPE, cooker).items():
-                self.assertAlmostEqual(food.cooktime * g.TUNING.BASE_COOK_TIME * speed, 20)
+                self.assertAlmostEqual(food.cooktime * g.TUNING.BASE_COOK_TIME * speed,
+                                       10 if cooker == "portablecookpot" else 20)
                 self.assertEqual((food.health, food.hunger, food.perishtime, food.priority), (60, 75, 4800, 100))
                 self.assertEqual(food.overridesymbolname, food.name + "_pot")
                 spicy = food.name.endswith("spicy")
@@ -103,7 +107,7 @@ class Recipes(unittest.TestCase):
         self.assertEqual(len(list(self.lua.globals().atlases.items())), 3)
         self.assertEqual(self.lua.globals().STRINGS.NAMES.TA2BRO_CHICKEN_SOY, "酱香炒鸡")
 
-    def test_installed_cooking_integration(self):
+    def installed_cooking(self):
         if GAME_DIR is None:
             self.skipTest("Use --game-dir for installed vanilla cooking integration")
         # Only tuning/effect-display dependencies are stubbed; ingredient tags,
@@ -123,6 +127,12 @@ class Recipes(unittest.TestCase):
             for module in ("preparedfoods", "preparedfoods_warly"):
                 lua.globals().package.loaded[module] = lua.execute(archive.read("scripts/" + module + ".lua").decode())
             cooking = lua.execute(archive.read("scripts/cooking.lua").decode())
+        lua.globals().package.loaded.cooking = cooking
+        return cooking
+
+    def test_installed_cooking_integration(self):
+        cooking = self.installed_cooking()
+        lua = self.lua
         for cooker in ("cookpot", "portablecookpot"):
             for _, food in self.make(lua.globals().TUNING, lua.globals().FOODTYPE, cooker).items():
                 lua.globals().AddCookerRecipe(cooker, food, True)
@@ -139,6 +149,67 @@ class Recipes(unittest.TestCase):
                 result = cooking.CalculateRecipe(cooker, lua.table_from(["drumstick", "potato", "pepper", ingredient]))
                 self.assertFalse(result[0].startswith("ta2bro_"), ingredient)
         print("Installed vanilla cooking integration: 86 pot/ingredient scenarios passed")
+
+    def test_installed_cookdiary_parser(self):
+        if COOKDIARY_DIR is None:
+            self.skipTest("Use --cookdiary-dir and --game-dir for CookDiary parser integration")
+        cooking = self.installed_cooking()
+        lua = self.lua
+        # Run the installed parser unchanged. Only unrelated UI dependencies
+        # are stubbed; ingredient definitions come from the installed game.
+        lua.execute('''
+            package.loaded.util = true
+            package.loaded.diary_utils = {aliases={}, aliases_reverse={}}
+            package.loaded.diary_exception = {}
+            package.loaded.diary_tags = {}
+            function deepcopy(t)
+                if type(t) ~= "table" then return t end
+                local copy = {}
+                for k,v in pairs(t) do copy[k] = deepcopy(v) end
+                return copy
+            end
+            function upvalue(fn, key)
+                for i=1,100 do
+                    local name, value = debug.getupvalue(fn, i)
+                    if name == key then return value end
+                    if name == nil then break end
+                end
+                error("CookDiary parser changed: missing " .. key)
+            end
+        ''')
+        module = lua.execute((COOKDIARY_DIR / "scripts/diary_preload_fooddetail.lua").read_text(encoding="utf-8"))
+        upvalue = lua.globals().upvalue
+        ingredient_values = upvalue(cooking.CalculateRecipe, "GetIngredientValues")
+        search = upvalue(module.GetFoodDetail, "SmartSearch")
+        minimize = upvalue(module.GetFoodDetail, "MinimizeRecipe")
+        details = upvalue(module.GetFoodDetail, "diary_food_detail")
+        upvalue(module.GetFoodDetail, "GetAllNameTag")()
+        ingredients = ("drumstick", "drumstick_cooked", "potato", "potato_cooked",
+                       "corn", "corn_cooked", "pepper", "pepper_cooked", "garlic",
+                       "garlic_cooked", "onion", "onion_cooked", "ice", "monstermeat",
+                       "twigs", "honey", "carrot")
+        for cooker in ("cookpot", "portablecookpot"):
+            for _, food in self.make(lua.globals().TUNING, lua.globals().FOODTYPE, cooker).items():
+                with self.subTest(cooker=cooker, food=food.name):
+                    details[food.name] = food
+                    parsed = search(food.test)
+                    self.assertTrue(parsed, "CookDiary could not discover " + food.name)
+                    self.assertTrue(minimize(food.name, parsed))
+                    self.assertEqual(len(parsed.minlist), 2, "Both potato and corn must be discovered")
+                    # Compare CookDiary's inferred restrictions with actual
+                    # predicates, including cooked fillers and mixed flavors.
+                    for items in combinations_with_replacement(ingredients, 4):
+                        values = ingredient_values(lua.table_from(items))
+                        names, tags = values.names, values.tags
+                        expected = bool(food.test(cooker, names, tags))
+                        allowed = (all((names[k] or 0) <= v for k, v in parsed.maxnames.items())
+                                   and all((tags[k] or 0) <= v for k, v in parsed.maxtags.items()))
+                        predicted = allowed and any(
+                            all((names[k] or 0) >= v for k, v in branch.names.items())
+                            and all((tags[k] or 0) >= v for k, v in branch.tags.items())
+                            for _, branch in parsed.minlist.items())
+                        self.assertEqual(predicted, expected, (cooker, food.name, items))
+        print("CookDiary parser integration: 29,070 recipe/pot/ingredient scenarios passed")
 
 
 def read_texture(data):
@@ -217,6 +288,8 @@ class Resources(unittest.TestCase):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--game-dir", type=Path)
+    parser.add_argument("--cookdiary-dir", type=Path)
     args, remaining = parser.parse_known_args()
     GAME_DIR = args.game_dir
+    COOKDIARY_DIR = args.cookdiary_dir
     unittest.main(argv=[__file__, *remaining], verbosity=2)

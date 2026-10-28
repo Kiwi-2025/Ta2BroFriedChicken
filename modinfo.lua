@@ -1,7 +1,7 @@
 name = "他二哥炒鸡"
 description = "永恒领域外卖开张！没有配送员，只有你和一口锅。\n生鸟腿 + 生土豆/玉米 + 生辣椒/大蒜/洋葱，三种口味，浓汁管饱！\n树枝不入席，蜂蜜先歇歇：禁止非食度和甜味度。\n混合调味优先级：辣椒 > 大蒜 > 洋葱。"
 author = "Ta2BroFriedChicken"
-version = "1.0.4"
+version = "1.1.0"
 api_version = 10
 dst_compatible = true
 dont_starve_compatible = false

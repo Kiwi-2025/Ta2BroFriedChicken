@@ -1,24 +1,32 @@
--- Keep the matching logic shared by both cookers and the food prefabs.
--- Cooked ingredients may fill a slot, but never count toward these gates.
-local function count(names, name)
-    return names[name] or 0
-end
-
-local function flavor(names, tags)
-    if count(names, "drumstick") < 1
-        or count(names, "potato") + count(names, "corn") < 1
-        or (tags.inedible or 0) ~= 0
-        or (tags.sweetener or 0) ~= 0 then
-        return nil
-    end
-    if count(names, "pepper") >= 1 then
-        return "spicy"
-    elseif count(names, "garlic") >= 1 then
-        return "garlic"
-    elseif count(names, "onion") >= 1 then
-        return "soy"
-    end
-end
+-- Keep each predicate independent: CookDiary probes ingredient reads in order.
+-- Test required ingredients before exclusions so it never tries to satisfy a
+-- different flavor first. Cooked ingredients remain valid fillers only.
+local tests = {
+    spicy = function(_, names, tags)
+        return (names.drumstick or 0) >= 1
+            and ((names.potato or 0) >= 1 or (names.corn or 0) >= 1)
+            and (names.pepper or 0) >= 1
+            and (tags.inedible or 0) == 0
+            and (tags.sweetener or 0) == 0
+    end,
+    garlic = function(_, names, tags)
+        return (names.drumstick or 0) >= 1
+            and ((names.potato or 0) >= 1 or (names.corn or 0) >= 1)
+            and (names.garlic or 0) >= 1
+            and (names.pepper or 0) == 0
+            and (tags.inedible or 0) == 0
+            and (tags.sweetener or 0) == 0
+    end,
+    soy = function(_, names, tags)
+        return (names.drumstick or 0) >= 1
+            and ((names.potato or 0) >= 1 or (names.corn or 0) >= 1)
+            and (names.onion or 0) >= 1
+            and (names.pepper or 0) == 0
+            and (names.garlic or 0) == 0
+            and (tags.inedible or 0) == 0
+            and (tags.sweetener or 0) == 0
+    end,
+}
 
 local variants = {
     { id = "spicy", ingredient = "pepper", sanity = 30,
@@ -33,6 +41,7 @@ return function(tuning, foodtype, cooker)
     local foods = {}
     -- Stewer multiplies recipe time by both BASE_COOK_TIME and cooker speed.
     local multiplier = cooker == "portablecookpot" and tuning.PORTABLE_COOK_POT_TIME_MULTIPLIER or 1
+    local duration = cooker == "portablecookpot" and 10 or 20
     for _, variant in ipairs(variants) do
         local id = variant.id
         local name = "ta2bro_chicken_" .. id
@@ -40,7 +49,7 @@ return function(tuning, foodtype, cooker)
             name = name,
             displayname = variant.displayname,
             description = variant.description,
-            test = function(_, names, tags) return flavor(names, tags) == id end,
+            test = tests[id],
             priority = 100,
             weight = 1,
             foodtype = foodtype.MEAT,
@@ -50,7 +59,7 @@ return function(tuning, foodtype, cooker)
             temperature = id == "spicy" and 40 or 0,
             temperatureduration = id == "spicy" and 15 or 0,
             perishtime = 10 * tuning.TOTAL_DAY_TIME,
-            cooktime = 20 / (tuning.BASE_COOK_TIME * multiplier),
+            cooktime = duration / (tuning.BASE_COOK_TIME * multiplier),
             overridebuild = "ta2bro_chicken",
             overridesymbolname = name .. "_pot",
             cookbook_atlas = "images/cookbook/" .. name .. ".xml",
